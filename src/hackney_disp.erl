@@ -22,7 +22,9 @@
 
 -export([start/0,
          checkout/4,
-         checkin/1, checkin/2]).
+         checkin/1,
+         checkin/2,
+         notify/2]).
 
 -define(TABLE, ?MODULE).
 
@@ -49,6 +51,8 @@ checkin({Info, Ref, Owner, Transport}, Socket) ->
         ok -> dispcount:checkin(Info, Ref, Socket);
         _ -> dispcount:checkin(Info, Ref, dead)
     end.
+
+notify(_Pool, _Msg) -> ok.
 
 %%%%%%%%%%%%%%%
 %%% Private %%%

@@ -88,7 +88,8 @@ start_disp(Key = {Host, Port, Transport}, Opts0) ->
             AtomKey,
             {hackney_disp_handler, {Host, Port, Transport, Opts}},
             [{restart,Type},{shutdown,Timeout},
-             {maxr,X},{maxt,Y},{resources, MaxConn}]
+             {maxr,X},{maxt,Y},{resources, MaxConn},
+             {dispatch_mechanism, round_robin}]
             ),
     case Res of
         ok ->

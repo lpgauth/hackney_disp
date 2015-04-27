@@ -66,8 +66,8 @@ pool_name(Host, Port, hackney_tcp_transport) ->
 start_disp(Key = {Host, Port, Transport}, Opts0) ->
     {ok, Type} = application:get_env(hackney, restart),
     {ok, Timeout} = application:get_env(hackney, shutdown),
-    {ok, X} = application:get_env(hackney, maxr),
-    {ok, Y} = application:get_env(hackney, maxt),
+    {ok, MaxR} = application:get_env(hackney, maxr),
+    {ok, MaxT} = application:get_env(hackney, maxt),
     Opts = hackney_util:maybe_apply_defaults([max_connections], Opts0),
     MaxConn = proplists:get_value(max_connections, Opts, 25),
     AtomKey = pool_name(Host, Port, Transport),
@@ -75,11 +75,11 @@ start_disp(Key = {Host, Port, Transport}, Opts0) ->
     Res = dispcount:start_dispatch(AtomKey,
         {hackney_disp_handler, {Host, Port, Transport, Opts}}, [
             {dispatch_mechanism, round_robin},
-            {maxr,X},
-            {maxt,Y},
+            {maxr, MaxR},
+            {maxt, MaxT},
             {resources, MaxConn},
-            {restart,Type},
-            {shutdown,Timeout}
+            {restart, Type},
+            {shutdown, Timeout}
     ]),
 
     case Res of

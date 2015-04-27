@@ -89,31 +89,44 @@ terminate(_Reason, _State) ->
     ok.
 
 %% private
-reconnect(State = #state{init_arg={Host, Port, Transport, Opts}}) ->
-    ConnectOpts0 = proplists:get_value(connect_options, Opts, []),
+lookup(Key, List) ->
+    lookup(Key, List, undefined).
+
+lookup(Key, List, Default) ->
+    case lists:keyfind(Key, 1, List) of
+        false -> Default;
+        {_, Value} -> Value
+    end.
+
+reconnect(State = #state {
+        init_arg = {Host, Port, Transport, Opts}
+    }) ->
+
+    ConnectOpts0 = lookup(connect_options, Opts, []),
     ConnectOpts1 = case hackney_util:is_ipv6(Host) of
         true -> [inet6 | ConnectOpts0];
         false -> ConnectOpts0
     end,
-    ConnectTimeout = proplists:get_value(connect_timeout, Opts, 8000),
-    SslOptions = proplists:get_value(ssl_options, Opts),
 
-    ConnectOpts = case {Transport, SslOptions} of
-        {hackney_ssl_transport, undefined} ->
-            case proplists:get_value(insecure, Opts) of
-                true ->
-                    ConnectOpts1 ++ [
-                        {verify, verify_none},
-                        {reuse_sessions, true}
-                    ];
-                _ -> ConnectOpts1
+    ConnectOpts = case Transport of
+        hackney_ssl_transport ->
+            SslOptions = lookup(ssl_options, Opts),
+            case SslOptions of
+                undefined ->
+                    case lookup(insecure, Opts) of
+                        true ->
+                            ConnectOpts1 ++ [
+                                {verify, verify_none},
+                                {reuse_sessions, true}
+                            ];
+                        _ -> ConnectOpts1
+                    end;
+                SslOpts -> ConnectOpts1 ++ SslOpts
             end;
-        {hackney_ssl_transport, SslOpts} ->
-            ConnectOpts1 ++ SslOpts;
-        {_, _} ->
-            ConnectOpts1
+        _ -> ConnectOpts1
     end,
 
+    ConnectTimeout = lookup(connect_timeout, Opts, 8000),
     case Transport:connect(Host, Port, ConnectOpts, ConnectTimeout) of
         {ok, Socket} ->
             {ok, State#state {

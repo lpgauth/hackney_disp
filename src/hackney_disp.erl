@@ -48,6 +48,7 @@ checkin({Info, Ref, Owner, Transport}, Socket) ->
     end.
 
 %% public
+%% TODO: should be part of hackney_pool_handler?
 notify(_Pool, _Msg) ->
     ok.
 

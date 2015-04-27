@@ -1,17 +1,17 @@
 %% -*- tab-width: 4;erlang-indent-level: 4;indent-tabs-mode: nil -*-
 %% ex: ft=erlang ts=4 sw=4 et
 
-{application, hackney_disp,
-    [
-        {description, "Hackney pool handler using dispcount"},
-        {vsn, "0.1.0"},
-        {applications, [kernel,
-                        stdlib,
-                        crypto,
-                        asn1,
-                        public_key,
-                        ssl,
-                        dispcount,
-                        hackney]},
-        {env, []}
+{application, hackney_disp, [
+  {description, "Hackney pool handler using dispcount"},
+  {vsn, "0.1.0"},
+  {applications, [
+    asn1,
+    crypto,
+    dispcount,
+    hackney,
+    kernel,
+    public_key,
+    ssl,
+    stdlib
+  ]}
 ]}.

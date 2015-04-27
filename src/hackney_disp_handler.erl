@@ -24,7 +24,7 @@
 ]).
 
 -record(state, {
-    resource = {error,undefined},
+    resource = {error, undefined},
     given = false,
     init_arg,
     transport
@@ -38,7 +38,7 @@ checkin(Socket, #state {
     } = State) ->
 
     Transport:setopts(Socket, [{active, once}]),
-    {ok, State#state{given=false}};
+    {ok, State#state {given = false}};
 checkin(_Socket, State) ->
     {ignore, State}.
 

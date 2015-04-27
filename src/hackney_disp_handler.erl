@@ -49,20 +49,24 @@ checkout(From, State = #state {
         transport = Transport
     }) ->
 
-    Transport:setopts(Socket, [{active,false}]),
+    Transport:setopts(Socket, [{active, false}]),
     case Transport:controlling_process(Socket, From) of
         ok ->
             {ok, {self(), Socket}, State#state {given = true}};
-        {error, badarg} ->
-            Transport:setopts(Socket, [{active, once}]),
-            {error, caller_is_dead, State};
-        {error, _Reason} ->
+        % {error, badarg} ->
+        %     Transport:setopts(Socket, [{active, once}]),
+        %     {error, caller_is_dead, State};
+        {error, Reason} ->
+            lager:warning("hackney checkout error: ~p~n", [Reason]),
             case reconnect(State) of
                 {ok, NewState} -> checkout(From, NewState);
                 Return -> Return
             end
     end;
-checkout(From,  #state {resource = {error, _Reason}} = State) ->
+checkout(From,  #state {
+        resource = {error, _Reason}
+    } = State) ->
+
     case reconnect(State) of
         {ok, NewState} -> checkout(From, NewState);
         Return -> Return
@@ -98,10 +102,8 @@ lookup(Key, List, Default) ->
         {_, Value} -> Value
     end.
 
-reconnect(State = #state {
-        init_arg = {Host, Port, Transport, Opts}
-    }) ->
-
+reconnect(State = #state {init_arg = InitArg}) ->
+    {Host, Port, Transport, Opts} = InitArg,
     ConnectOpts0 = lookup(connect_options, Opts, []),
     ConnectOpts1 = case hackney_util:is_ipv6(Host) of
         true -> [inet6 | ConnectOpts0];
@@ -110,8 +112,7 @@ reconnect(State = #state {
 
     ConnectOpts = case Transport of
         hackney_ssl_transport ->
-            SslOptions = lookup(ssl_options, Opts),
-            case SslOptions of
+            case lookup(ssl_options, Opts) of
                 undefined ->
                     case lookup(insecure, Opts) of
                         true ->
@@ -135,7 +136,7 @@ reconnect(State = #state {
             }};
         {error, Reason} ->
             Key = {Transport, Host, Port},
-            error_logger:warning_msg("hackney reconnect fail (~p): ~p~n", [Key, Reason]),
+            lager:warning("hackney reconnect error ~p: ~p~n", [Key, Reason]),
             {error, Reason, State#state {
                 resource = {error, Reason},
                 transport=Transport

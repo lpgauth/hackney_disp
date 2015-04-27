@@ -9,31 +9,28 @@
 %%% handles checkin/checkout.  The user shouldn't have to touch this
 %%% module.  @end
 %%%
-%% @todo: find a way to get rid of inactive pools.
-%%   idea: each load balancer has an associated series of counters in an ETS
-%%         table: one for checkin, one for checkout, and one timestamp.
-%%         If the number of checkin is equal to the number of checkouts and the
-%%         timestamp is outdated from a given value, it is assumed that the
-%%         dispatcher pool has been inactive for that period of time. When
-%%         that happens, it is shut down, to be reopened next time.
-%%
--module(hackney_disp).
--behaviour(hackney_pool_handler).
 
--export([start/0,
-         checkout/4,
-         checkin/1,
-         checkin/2,
-         notify/2]).
+-module(hackney_disp).
+-include_lib("hackney/include/hackney.hrl").
+
+-behaviour(hackney_pool_handler).
+-export([
+    start/0,
+    checkout/4,
+    checkin/2
+]).
+
+-export([
+    notify/2
+]).
 
 -define(TABLE, ?MODULE).
 
--include_lib("hackney/include/hackney.hrl").
-
+%% hackney_pool_handler callbacks
 start() ->
     hackney_util:require([dispcount]).
 
-checkout(Host, Port, Transport, #client{options=Opts}) ->
+checkout(Host, Port, Transport, #client {options=Opts}) ->
     Info = find_disp({Host, Port, Transport}, Opts),
     case dispcount:checkout(Info) of
         {ok, CheckinReference, {Owner, Socket}} ->
@@ -41,9 +38,6 @@ checkout(Host, Port, Transport, #client{options=Opts}) ->
         {error, Reason} ->
             {error, Reason}
     end.
-
-checkin({Info, Ref, _Owner, _Transport}) ->
-    dispcount:checkin(Info, Ref, dead).
 
 checkin({Info, Ref, Owner, Transport}, Socket) ->
     try Transport:controlling_process(Socket, Owner) of
@@ -53,49 +47,41 @@ checkin({Info, Ref, Owner, Transport}, Socket) ->
         dispcount:checkin(Info, Ref, dead)
     end.
 
-notify(_Pool, _Msg) -> ok.
+%% public
+notify(_Pool, _Msg) ->
+    ok.
 
-%%%%%%%%%%%%%%%
-%%% Private %%%
-%%%%%%%%%%%%%%%
-
-%% This function needs to be revised after the shutdown mechanism
-%% for a worker is decided on.
+%% private
 find_disp(Key, Args) ->
     case ets:lookup(hackney_pool, Key) of
-        [] ->
-            start_disp(Key, Args);
-        [{_,Info}] ->
-            Info
+        [] -> start_disp(Key, Args);
+        [{_,Info}] -> Info
     end.
 
-%% Wart ahead. Atoms are created dynamically based on the key
-%% to ensure uniqueness of pools.
-%% TODO: optionally use gproc for registration to avoid this?
+pool_name(Host, Port, hackney_ssl_transport) ->
+    list_to_atom("dispcount_" ++ Host ++ integer_to_list(Port) ++ "_ssl");
+pool_name(Host, Port, hackney_tcp_transport) ->
+    list_to_atom("dispcount_" ++ Host ++ integer_to_list(Port)).
+
 start_disp(Key = {Host, Port, Transport}, Opts0) ->
     {ok, Type} = application:get_env(hackney, restart),
     {ok, Timeout} = application:get_env(hackney, shutdown),
     {ok, X} = application:get_env(hackney, maxr),
     {ok, Y} = application:get_env(hackney, maxt),
-
-    %% apply defaults to the options
     Opts = hackney_util:maybe_apply_defaults([max_connections], Opts0),
     MaxConn = proplists:get_value(max_connections, Opts, 25),
+    AtomKey = pool_name(Host, Port, Transport),
 
-    AtomKey = case Transport of
-        hackney_ssl_transport ->
-            list_to_atom("dispcount_" ++ Host ++ integer_to_list(Port)
-                         ++ "_ssl");
-        _ ->
-            list_to_atom("dispcount_" ++ Host ++ integer_to_list(Port))
-    end,
-    Res = dispcount:start_dispatch(
-            AtomKey,
-            {hackney_disp_handler, {Host, Port, Transport, Opts}},
-            [{restart,Type},{shutdown,Timeout},
-             {maxr,X},{maxt,Y},{resources, MaxConn},
-             {dispatch_mechanism, round_robin}]
-            ),
+    Res = dispcount:start_dispatch(AtomKey,
+        {hackney_disp_handler, {Host, Port, Transport, Opts}}, [
+            {dispatch_mechanism, round_robin},
+            {maxr,X},
+            {maxt,Y},
+            {resources, MaxConn},
+            {restart,Type},
+            {shutdown,Timeout}
+    ]),
+
     case Res of
         ok ->
             {ok, Info} = dispcount:dispatcher_info(AtomKey),

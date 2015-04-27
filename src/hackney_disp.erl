@@ -33,7 +33,6 @@
 start() ->
     hackney_util:require([dispcount]).
 
-
 checkout(Host, Port, Transport, #client{options=Opts}) ->
     Info = find_disp({Host, Port, Transport}, Opts),
     case dispcount:checkout(Info) of
@@ -47,9 +46,11 @@ checkin({Info, Ref, _Owner, _Transport}) ->
     dispcount:checkin(Info, Ref, dead).
 
 checkin({Info, Ref, Owner, Transport}, Socket) ->
-    case Transport:controlling_process(Socket, Owner) of
+    try Transport:controlling_process(Socket, Owner) of
         ok -> dispcount:checkin(Info, Ref, Socket);
-        _ -> dispcount:checkin(Info, Ref, dead)
+        {error, _Reason} -> dispcount:checkin(Info, Ref, dead)
+    catch error:badarg ->
+        dispcount:checkin(Info, Ref, dead)
     end.
 
 notify(_Pool, _Msg) -> ok.

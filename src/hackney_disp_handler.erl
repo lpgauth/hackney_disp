@@ -37,18 +37,22 @@ checkin(Socket, #state {
         transport= Transport
     } = State) ->
 
+    statsderl:increment([<<"hackney.">>, host(State), <<".checkin.ok">>], 1, 0.01),
     Transport:setopts(Socket, [{active, once}]),
     {ok, State#state {given = false}};
 checkin(_Socket, State) ->
+    statsderl:increment([<<"hackney.">>, host(State), <<".checkin.ignore">>], 1, 0.01),
     {ignore, State}.
 
 checkout(_From, State = #state {given = true}) ->
+    statsderl:increment([<<"hackney.">>, host(State), <<".checkout.busy">>], 1, 0.01),
     {error, busy, State};
 checkout(From, State = #state {
         resource = {ok, Socket},
         transport = Transport
     }) ->
 
+    statsderl:increment([<<"hackney.">>, host(State), <<".checkout.ok">>], 1, 0.01),
     Transport:setopts(Socket, [{active, false}]),
     case Transport:controlling_process(Socket, From) of
         ok ->
@@ -67,17 +71,20 @@ checkout(From,  #state {
         resource = {error, _Reason}
     } = State) ->
 
+    statsderl:increment([<<"hackney.">>, host(State), <<".checkout.error">>], 1, 0.01),
     case reconnect(State) of
         {ok, NewState} -> checkout(From, NewState);
         Return -> Return
     end;
 checkout(From, State) ->
+    statsderl:increment([<<"hackney.">>, host(State), <<".checkout.invalid">>], 1, 0.01),
     {stop, {invalid_call, From, State}, State}.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 dead(State) ->
+    statsderl:increment([<<"hackney.">>, host(State), <<".dead">>], 1, 0.01),
     case reconnect(State#state {given = false}) of
         {ok, NewState} -> {ok, NewState};
         {error, _Reason, NewState} -> {ok, NewState}
@@ -93,6 +100,8 @@ terminate(_Reason, _State) ->
     ok.
 
 %% private
+host(#state {init_arg = {Host, _, _, _}}) -> Host.
+
 lookup(Key, List) ->
     lookup(Key, List, undefined).
 
@@ -102,7 +111,8 @@ lookup(Key, List, Default) ->
         {_, Value} -> Value
     end.
 
-reconnect(State = #state {init_arg = InitArg}) ->
+reconnect(#state {init_arg = InitArg} = State) ->
+    statsderl:increment([<<"hackney.">>, host(State), <<".reconnect">>], 1, 0.01),
     {Host, Port, Transport, Opts} = InitArg,
     ConnectOpts0 = lookup(connect_options, Opts, []),
     ConnectOpts1 = case hackney_util:is_ipv6(Host) of

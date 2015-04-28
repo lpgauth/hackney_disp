@@ -37,31 +37,31 @@ checkin(Socket, #state {
         transport= Transport
     } = State) ->
 
-    statsderl:increment([<<"hackney.">>, host(State), <<".checkin.ok">>], 1, 0.01),
+    statsderl:increment([<<"hackney_disp.">>, host(State), <<".checkin.ok">>], 1, 0.01),
     Transport:setopts(Socket, [{active, once}]),
     {ok, State#state {given = false}};
 checkin(_Socket, State) ->
-    statsderl:increment([<<"hackney.">>, host(State), <<".checkin.ignore">>], 1, 0.01),
+    statsderl:increment([<<"hackney_disp.">>, host(State), <<".checkin.ignore">>], 1, 0.01),
     {ignore, State}.
 
 checkout(_From, State = #state {given = true}) ->
-    statsderl:increment([<<"hackney.">>, host(State), <<".checkout.busy">>], 1, 0.01),
+    statsderl:increment([<<"hackney_disp.">>, host(State), <<".checkout.busy">>], 1, 0.01),
     {error, busy, State};
 checkout(From, State = #state {
         resource = {ok, Socket},
         transport = Transport
     }) ->
 
-    statsderl:increment([<<"hackney.">>, host(State), <<".checkout.ok">>], 1, 0.01),
+    statsderl:increment([<<"hackney_disp.">>, host(State), <<".checkout.ok">>], 1, 0.01),
     Transport:setopts(Socket, [{active, false}]),
     case Transport:controlling_process(Socket, From) of
         ok ->
             {ok, {self(), Socket}, State#state {given = true}};
-        % {error, badarg} ->
-        %     Transport:setopts(Socket, [{active, once}]),
-        %     {error, caller_is_dead, State};
+        {error, badarg} ->
+            Transport:setopts(Socket, [{active, once}]),
+            {error, caller_is_dead, State};
         {error, Reason} ->
-            lager:warning("hackney checkout error: ~p~n", [Reason]),
+            lager:warning("hackney_disp checkout error: ~p~n", [Reason]),
             case reconnect(State) of
                 {ok, NewState} -> checkout(From, NewState);
                 Return -> Return
@@ -71,20 +71,20 @@ checkout(From,  #state {
         resource = {error, _Reason}
     } = State) ->
 
-    statsderl:increment([<<"hackney.">>, host(State), <<".checkout.error">>], 1, 0.01),
+    statsderl:increment([<<"hackney_disp.">>, host(State), <<".checkout.error">>], 1, 0.01),
     case reconnect(State) of
         {ok, NewState} -> checkout(From, NewState);
         Return -> Return
     end;
 checkout(From, State) ->
-    statsderl:increment([<<"hackney.">>, host(State), <<".checkout.invalid">>], 1, 0.01),
+    statsderl:increment([<<"hackney_disp.">>, host(State), <<".checkout.invalid">>], 1, 0.01),
     {stop, {invalid_call, From, State}, State}.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 dead(State) ->
-    statsderl:increment([<<"hackney.">>, host(State), <<".dead">>], 1, 0.01),
+    statsderl:increment([<<"hackney_disp.">>, host(State), <<".dead">>], 1, 0.01),
     case reconnect(State#state {given = false}) of
         {ok, NewState} -> {ok, NewState};
         {error, _Reason, NewState} -> {ok, NewState}
@@ -112,7 +112,7 @@ lookup(Key, List, Default) ->
     end.
 
 reconnect(#state {init_arg = InitArg} = State) ->
-    statsderl:increment([<<"hackney.">>, host(State), <<".reconnect">>], 1, 0.01),
+    statsderl:increment([<<"hackney_disp.">>, host(State), <<".reconnect">>], 1, 0.01),
     {Host, Port, Transport, Opts} = InitArg,
     ConnectOpts0 = lookup(connect_options, Opts, []),
     ConnectOpts1 = case hackney_util:is_ipv6(Host) of
@@ -146,7 +146,7 @@ reconnect(#state {init_arg = InitArg} = State) ->
             }};
         {error, Reason} ->
             Key = {Transport, Host, Port},
-            lager:warning("hackney reconnect error ~p: ~p~n", [Key, Reason]),
+            lager:warning("hackney_disp reconnect error ~p: ~p~n", [Key, Reason]),
             {error, Reason, State#state {
                 resource = {error, Reason},
                 transport=Transport
